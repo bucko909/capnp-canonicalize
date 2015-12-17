@@ -77,9 +77,9 @@ class MessageRef(collections.namedtuple('MessageRefBase', 'segments current_seg 
             if data_type == 6:
                 return PointerList(reported_size, new_ref)
             tag_data = new_ref.as_integer()
-            size = decode_bits(ptr_data, 2, 31)
-            data_len = decode_bits(ptr_data, 32, 47)
-            pointer_len = decode_bits(ptr_data, 48, 63)
+            size = decode_bits(tag_data, 2, 31)
+            data_len = decode_bits(tag_data, 32, 47)
+            pointer_len = decode_bits(tag_data, 48, 63)
             assert reported_size == (data_len + pointer_len) * size, (size, reported_size)
             data_ref = new_ref.relative_offset(1)
             return StructList(data_len, pointer_len, size, data_ref)
@@ -175,8 +175,9 @@ class Struct(object):
         for i in range(data_len):
             data_ref.relative_offset(i).set_integer(self.message_ref.relative_offset(i).as_integer())
         pointer_ref = data_ref.relative_offset(data_len)
+        my_pointer_ref = self.message_ref.relative_offset(self.data_len)
         for i in range(pointer_len):
-            self.message_ref.relative_offset(data_len+i).follow_pointer().canonical_pointer(pointer_ref.relative_offset(i))
+            my_pointer_ref.relative_offset(i).follow_pointer().canonical_pointer(pointer_ref.relative_offset(i))
 
 class StructList(object):
     def __init__(self, data_len, pointer_len, size, message_ref):
@@ -186,10 +187,14 @@ class StructList(object):
         self.size = size
         self.message_ref = message_ref
 
-    def min_data_len(self):
+    def min_member_data_len(self):
+        if self.size == 0:
+            return 0
         return max(s.min_data_len() for s in self)
 
-    def min_pointer_len(self):
+    def min_member_pointer_len(self):
+        if self.size == 0:
+            return 0
         return max(s.min_pointer_len() for s in self)
 
     def __iter__(self):
@@ -198,12 +203,15 @@ class StructList(object):
             yield Struct(self.data_len, self.pointer_len, self.message_ref.relative_offset(word_size*i))
 
     def canonical_pointer(self, new_ref):
-        data_len = self.min_data_len()
-        pointer_len = self.min_pointer_len()
+        data_len = self.min_member_data_len()
+        pointer_len = self.min_member_pointer_len()
         word_len = (data_len + pointer_len) * self.size
         pointer_data = 1 + (7 << 32) + (word_len << 35)
         tag_ref = new_ref.extend_segment(1 + word_len)
         new_ref.set_pointer(pointer_data, tag_ref)
+        tag_data = 0 + (self.size << 2) + (data_len << 32) + (pointer_len << 48)
+        assert tag_data or self.size == 0
+        tag_ref.set_integer(tag_data)
         data_ref = tag_ref.relative_offset(1)
         word_size = data_len + pointer_len
         for i, s in enumerate(self):
