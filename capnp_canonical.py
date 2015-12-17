@@ -178,6 +178,11 @@ class Struct(object):
         my_pointer_ref = self.message_ref.relative_offset(self.data_len)
         for i in range(pointer_len):
             my_pointer_ref.relative_offset(i).follow_pointer().canonical_pointer(pointer_ref.relative_offset(i))
+        # Ensure we didn't skip anything juicy.
+        for i in range(data_len, self.data_len):
+            assert self.message_ref.relative_offset(i).as_integer() == 0
+        for i in range(pointer_len, self.pointer_len):
+            assert self.message_ref.relative_offset(data_len+i).as_integer() == 0
 
 class StructList(object):
     def __init__(self, data_len, pointer_len, size, message_ref):
