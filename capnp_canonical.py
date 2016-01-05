@@ -182,7 +182,7 @@ class Struct(object):
         for i in range(data_len, self.data_len):
             assert self.message_ref.relative_offset(i).as_integer() == 0
         for i in range(pointer_len, self.pointer_len):
-            assert self.message_ref.relative_offset(data_len+i).as_integer() == 0
+            assert self.message_ref.relative_offset(self.data_len+i).as_integer() == 0
 
 class StructList(object):
     def __init__(self, data_len, pointer_len, size, message_ref):
